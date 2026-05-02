@@ -17,10 +17,11 @@ def create_app():
 
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "synthmon-dev-secret")
     
-    # Session configuration
+    # Session configuration for Cross-Domain support (Vercel -> Render)
     app.config.update(
-        SESSION_COOKIE_SAMESITE='Lax',
-        SESSION_COOKIE_SECURE=False,
+        SESSION_COOKIE_SAMESITE='None',
+        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_HTTPONLY=True,
     )
 
     # Init DB
