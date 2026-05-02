@@ -20,7 +20,7 @@ def auth_login():
     """Initiates the Google OAuth login flow."""
     # Use internal callback but ensure it's https in production
     redirect_uri = url_for('auth.auth_callback', _external=True)
-    if redirect_uri.startswith('http://') and not current_app.debug:
+    if 'onrender.com' in redirect_uri:
         redirect_uri = redirect_uri.replace('http://', 'https://')
     return google.authorize_redirect(redirect_uri)
 
