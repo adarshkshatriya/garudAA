@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="config.js"></script>
 <script>
   tailwind.config = {
     darkMode: 'class',
@@ -123,12 +124,12 @@
   .uptime-seg { flex:1; border-radius:2px; }
 </style>
 </head>
-<body>
+<body class="hidden" id="body-content">
 
 <!-- ═══════════════════════════════════════════════════════ SIDEBAR -->
 <nav class="sidebar">
   <div class="px-5 py-5 border-b border-slate-200 flex items-center justify-center">
-    <img src="{{ url_for('static', filename='logo.png') }}" alt="garudAA" class="h-10 object-contain">
+    <img src="static/logo.png" alt="garudAA" class="h-10 object-contain">
   </div>
 
   <div class="px-3 mt-4 flex-1">
@@ -158,16 +159,13 @@
 
   <div class="px-5 py-4 border-t border-slate-200">
     <div class="flex items-center gap-3">
-      {% if session.get('user') and session['user'] is mapping and session['user'].get('picture') %}
-      <img src="{{ session['user']['picture'] }}" alt="Profile" class="w-8 h-8 rounded-full border border-slate-200">
-      {% else %}
-      <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold">{{ session.get('user', {}).get('name', 'U')[0] if session.get('user') and session['user'] is mapping else 'U' }}</div>
-      {% endif %}
+      <img id="user-avatar" src="" alt="Profile" class="w-8 h-8 rounded-full border border-slate-200 hidden">
+      <div id="user-avatar-placeholder" class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white">U</div>
       <div class="flex-1 min-w-0">
-        <div class="text-xs font-semibold text-slate-700 truncate">{{ session.get('user', {}).get('name', 'User') if session.get('user') and session['user'] is mapping else 'User' }}</div>
-        <div class="text-xs text-slate-500 truncate">{{ session.get('user', {}).get('email', '') if session.get('user') and session['user'] is mapping else '' }}</div>
+        <div id="user-name" class="text-xs font-semibold text-slate-700 truncate">Loading...</div>
+        <div id="user-email" class="text-xs text-slate-500 truncate">...</div>
       </div>
-      <a href="{{ url_for('auth.auth_logout') }}" title="Logout" class="ml-auto text-slate-500 hover:text-danger-400 transition-colors">
+      <a href="#" onclick="logout()" title="Logout" class="ml-auto text-slate-500 hover:text-danger-400 transition-colors">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       </a>
     </div>
@@ -456,10 +454,8 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════ TOAST CONTAINER -->
 <div id="toast"></div>
 
-<!-- ═══════════════════════════════════════════════════════ JAVASCRIPT -->
 <script>
 // ──── State ──────────────────────────────────────────────────────────────────
 const state = {
@@ -468,14 +464,48 @@ const state = {
   stats: {},
   alerts: [],
   ssl: [],
+  user: null,
   refreshInterval: null,
   charts: { uptime: null, rt: null }
 };
 
+// ──── Auth check ─────────────────────────────────────────────────────────────
+async function checkAuth() {
+  try {
+    const user = await api('/api/me');
+    state.user = user;
+    renderUser();
+    document.getElementById('body-content').classList.remove('hidden');
+    init();
+  } catch(e) {
+    console.log('Not logged in, redirecting...');
+    window.location.href = 'index.html';
+  }
+}
+
+function renderUser() {
+  if (!state.user) return;
+  document.getElementById('user-name').textContent = state.user.name || 'User';
+  document.getElementById('user-email').textContent = state.user.email || '';
+  if (state.user.picture) {
+    const img = document.getElementById('user-avatar');
+    img.src = state.user.picture;
+    img.classList.remove('hidden');
+    document.getElementById('user-avatar-placeholder').classList.add('hidden');
+  } else {
+    document.getElementById('user-avatar-placeholder').textContent = (state.user.name || 'U')[0].toUpperCase();
+  }
+}
+
+function logout() {
+    window.location.href = `${CONFIG.API_BASE_URL}/auth/logout`;
+}
+
 // ──── Page Navigation ─────────────────────────────────────────────────────────
 function showPage(page) {
   ['dashboard','monitors','ssl','alerts','settings'].forEach(p => {
-    document.getElementById(`page-${p}`).classList.add('hidden');
+    const el = document.getElementById(`page-${p}`);
+    if (el) el.classList.add('hidden');
     document.getElementById(`nav-${p}`)?.classList.remove('active');
   });
   document.getElementById(`page-${page}`).classList.remove('hidden');
@@ -506,7 +536,10 @@ updateClock();
 
 // ──── API helpers ─────────────────────────────────────────────────────────────
 async function api(path, opts={}) {
-  const res = await fetch(path, { headers:{'Content-Type':'application/json'}, ...opts });
+  const url = path.startsWith('http') ? path : `${CONFIG.API_BASE_URL}${path}`;
+  // Ensure credentials (cookies) are sent
+  opts.credentials = 'include';
+  const res = await fetch(url, { headers:{'Content-Type':'application/json'}, ...opts });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -574,7 +607,6 @@ async function fetchAndRenderCharts() {
     const uptime = series.map(s => s.uptime ?? null);
     const rt     = series.map(s => s.avg_rt ?? null);
 
-    // Uptime chart
     const ctxU = document.getElementById('chart-uptime').getContext('2d');
     if (state.charts.uptime) state.charts.uptime.destroy();
     state.charts.uptime = new Chart(ctxU, {
@@ -592,7 +624,6 @@ async function fetchAndRenderCharts() {
       options: { ...CHART_OPTS, scales: { ...CHART_OPTS.scales, y:{ ...CHART_OPTS.scales.y, min:0, max:100, ticks:{ ...CHART_OPTS.scales.y.ticks, callback: v => v+'%' } } } }
     });
 
-    // RT chart
     const ctxR = document.getElementById('chart-rt').getContext('2d');
     if (state.charts.rt) state.charts.rt.destroy();
     state.charts.rt = new Chart(ctxR, {
@@ -610,14 +641,10 @@ async function fetchAndRenderCharts() {
   } catch(e) { console.error('Chart error:', e); }
 }
 
-// ──── Dashboard monitor mini-table ────────────────────────────────────────────
 function renderDashMonitors() {
   const el = document.getElementById('dash-monitor-list');
   if (!state.monitors.length) {
-    el.innerHTML = `<div class="p-10 text-center text-slate-600">
-      <svg class="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-      <div class="text-sm">No monitors yet. <button onclick="openAddMonitor()" class="text-brand-400 underline">Add your first monitor</button></div>
-    </div>`;
+    el.innerHTML = `<div class="p-10 text-center text-slate-600"><div class="text-sm">No monitors yet.</div></div>`;
     return;
   }
   const rows = state.monitors.slice(0,6).map(m => `
@@ -637,154 +664,59 @@ function renderDashMonitors() {
       <td class="text-xs text-slate-500 font-mono">${m.last_checked ? fmtTime(m.last_checked) : 'Never'}</td>
     </tr>`).join('');
   el.innerHTML = `<table class="data-table">
-    <thead><tr>
-      <th>Monitor</th><th>Status</th><th>Response</th><th>Uptime 24h</th><th>Last Check</th>
-    </tr></thead>
+    <thead><tr><th>Monitor</th><th>Status</th><th>Response</th><th>Uptime 24h</th><th>Last Check</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
 
-// ──── Monitors full page ──────────────────────────────────────────────────────
 function renderMonitorsPage() {
   const search = (document.getElementById('monitor-search')?.value||'').toLowerCase();
-  const filtered = state.monitors.filter(m =>
-    m.url.toLowerCase().includes(search) || (m.name||'').toLowerCase().includes(search)
-  );
+  const filtered = state.monitors.filter(m => m.url.toLowerCase().includes(search) || (m.name||'').toLowerCase().includes(search));
   document.getElementById('monitor-count').textContent = `${filtered.length} monitors`;
-
   if (!filtered.length) {
     document.getElementById('monitors-table').innerHTML = `<div class="p-10 text-center text-slate-600 text-sm">No monitors found.</div>`;
     return;
   }
-
   const rows = filtered.map(m => `
     <tr>
-      <td>
-        <div class="flex items-center gap-3">
-          <span class="pulse-dot ${m.last_status==='UP'?'up':'down'}"></span>
-          <div>
-            <div class="font-semibold text-slate-800 text-sm">${esc(m.name||m.url)}</div>
-            <a href="${esc(m.url)}" target="_blank" class="text-xs text-slate-500 font-mono hover:text-brand-400 transition-colors">${esc(m.url)}</a>
-          </div>
-        </div>
-      </td>
-      <td>
-        <span class="badge px-2.5 py-1 rounded-full text-xs font-bold ${m.last_status==='UP'?'badge-up':'badge-down'}">
-          ${m.last_status==='UP'?'● UP':'● DOWN'}
-        </span>
-      </td>
+      <td><div class="flex items-center gap-3"><span class="pulse-dot ${m.last_status==='UP'?'up':'down'}"></span><div><div class="font-semibold text-slate-800 text-sm">${esc(m.name||m.url)}</div><a href="${esc(m.url)}" target="_blank" class="text-xs text-slate-500 font-mono hover:text-brand-400 transition-colors">${esc(m.url)}</a></div></div></td>
+      <td><span class="badge px-2.5 py-1 rounded-full text-xs font-bold ${m.last_status==='UP'?'badge-up':'badge-down'}">${m.last_status==='UP'?'● UP':'● DOWN'}</span></td>
       <td class="font-mono text-sm text-slate-700">${m.last_response_time ? Math.round(m.last_response_time)+'ms' : '—'}</td>
-      <td>
-        <div class="flex items-center gap-2">
-          <div class="text-sm font-mono ${uptimeColor(m.uptime_24h)}">${m.uptime_24h != null ? m.uptime_24h+'%' : '—'}</div>
-        </div>
-      </td>
-      <td>
-        ${m.days_remaining != null
-          ? `<span class="text-xs font-mono ${sslColor(m.days_remaining)}">${m.days_remaining}d · ${esc(m.expiry_date||'')}</span>`
-          : '<span class="text-xs text-slate-600">—</span>'}
-      </td>
+      <td><div class="text-sm font-mono ${uptimeColor(m.uptime_24h)}">${m.uptime_24h != null ? m.uptime_24h+'%' : '—'}</div></td>
+      <td>${m.days_remaining != null ? `<span class="text-xs font-mono ${sslColor(m.days_remaining)}">${m.days_remaining}d · ${esc(m.expiry_date||'')}</span>` : '<span class="text-xs text-slate-600">—</span>'}</td>
       <td class="text-xs text-slate-500 font-mono">${m.last_checked ? fmtTime(m.last_checked) : 'Never'}</td>
-      <td>
-        <div class="flex gap-2">
-          <button onclick="forceCheck(${m.id})" class="btn-ghost text-xs py-1.5">Check</button>
-          <button onclick="deleteMonitor(${m.id},'${esc(m.name||m.url)}')" class="btn-danger py-1.5">Delete</button>
-        </div>
-      </td>
+      <td><div class="flex gap-2"><button onclick="forceCheck(${m.id})" class="btn-ghost text-xs py-1.5">Check</button><button onclick="deleteMonitor(${m.id},'${esc(m.name||m.url)}')" class="btn-danger py-1.5">Delete</button></div></td>
     </tr>`).join('');
-
-  document.getElementById('monitors-table').innerHTML = `
-    <table class="data-table">
-      <thead><tr>
-        <th>Monitor</th><th>Status</th><th>Response</th><th>Uptime 24h</th><th>SSL Expiry</th><th>Last Check</th><th>Actions</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+  document.getElementById('monitors-table').innerHTML = `<table class="data-table"><thead><tr><th>Monitor</th><th>Status</th><th>Response</th><th>Uptime 24h</th><th>SSL Expiry</th><th>Last Check</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function filterMonitors() { renderMonitorsPage(); }
 
-// ──── SSL Page ────────────────────────────────────────────────────────────────
 async function renderSSLPage() {
   try {
     const data = await api('/api/ssl');
-    state.ssl = data;
     const grid = document.getElementById('ssl-grid');
-    if (!data.length) {
-      grid.innerHTML = `<div class="card p-10 text-center text-slate-600 text-sm col-span-full">No SSL data yet. Add HTTPS monitors to see certificate info.</div>`;
-      return;
-    }
+    if (!data.length) { grid.innerHTML = `<div class="card p-10 text-center text-slate-600 text-sm col-span-full">No SSL data yet.</div>`; return; }
     grid.innerHTML = data.map(s => {
       const days = s.days_remaining;
       const pct  = Math.min(100, Math.max(0, days));
       const clr  = days < 7 ? '#ef4444' : days < 15 ? '#f59e0b' : '#10b981';
       const badge = days < 7 ? 'badge-down' : days < 15 ? 'badge-slow' : 'badge-up';
-      return `
-      <div class="card p-5 hover:border-indigo-300 transition-colors">
-        <div class="flex items-start justify-between mb-3">
-          <div class="flex-1 min-w-0">
-            <div class="font-semibold text-slate-800 text-sm truncate">${esc(s.name||s.url)}</div>
-            <div class="text-xs text-slate-500 font-mono truncate">${esc(s.url)}</div>
-          </div>
-          <span class="badge px-2 py-0.5 rounded text-xs font-mono ml-2 flex-shrink-0 ${badge}">
-            ${days < 7 ? '🔴 CRITICAL' : days < 15 ? '🟡 WARNING' : '🟢 OK'}
-          </span>
-        </div>
-        <div class="ssl-progress my-3">
-          <div class="ssl-progress-fill" style="width:${pct}%;background:${clr}"></div>
-        </div>
-        <div class="grid grid-cols-3 gap-2 text-xs">
-          <div>
-            <div class="text-slate-600 mb-0.5">Days Left</div>
-            <div class="font-mono font-bold" style="color:${clr}">${days ?? '—'}</div>
-          </div>
-          <div>
-            <div class="text-slate-600 mb-0.5">Expiry</div>
-            <div class="font-mono text-slate-700">${s.expiry_date || '—'}</div>
-          </div>
-          <div>
-            <div class="text-slate-600 mb-0.5">Issuer</div>
-            <div class="text-slate-500 truncate">${s.issuer || '—'}</div>
-          </div>
-        </div>
-      </div>`;
+      return `<div class="card p-5 hover:border-indigo-300 transition-colors"><div class="flex items-start justify-between mb-3"><div class="flex-1 min-w-0"><div class="font-semibold text-slate-800 text-sm truncate">${esc(s.name||s.url)}</div><div class="text-xs text-slate-500 font-mono truncate">${esc(s.url)}</div></div><span class="badge px-2 py-0.5 rounded text-xs font-mono ml-2 flex-shrink-0 ${badge}">${days < 7 ? '🔴 CRITICAL' : days < 15 ? '🟡 WARNING' : '🟢 OK'}</span></div><div class="ssl-progress my-3"><div class="ssl-progress-fill" style="width:${pct}%;background:${clr}"></div></div><div class="grid grid-cols-3 gap-2 text-xs"><div><div class="text-slate-600 mb-0.5">Days Left</div><div class="font-mono font-bold" style="color:${clr}">${days ?? '—'}</div></div><div><div class="text-slate-600 mb-0.5">Expiry</div><div class="font-mono text-slate-700">${s.expiry_date || '—'}</div></div><div><div class="text-slate-600 mb-0.5">Issuer</div><div class="text-slate-500 truncate">${s.issuer || '—'}</div></div></div></div>`;
     }).join('');
-  } catch(e) {
-    document.getElementById('ssl-grid').innerHTML = `<div class="card p-8 text-center text-danger-400 text-sm col-span-full">Failed to load SSL data.</div>`;
-  }
+  } catch(e) { document.getElementById('ssl-grid').innerHTML = `<div class="card p-8 text-center text-danger-400 text-sm col-span-full">Failed to load SSL data.</div>`; }
 }
 
-// ──── Alerts Page ─────────────────────────────────────────────────────────────
 async function renderAlertsPage() {
   try {
     const data = await api('/api/alerts?limit=50');
-    state.alerts = data;
     const el = document.getElementById('alerts-list');
-    if (!data.length) {
-      el.innerHTML = `<div class="p-10 text-center text-slate-600 text-sm">
-        <svg class="w-10 h-10 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        No alerts. Everything looks good!
-      </div>`;
-      return;
-    }
+    if (!data.length) { el.innerHTML = `<div class="p-10 text-center text-slate-600 text-sm">No alerts.</div>`; return; }
     const icons = { DOWN:'🔴', SLOW:'🟡', SSL_CRITICAL:'🔴', SSL_WARNING:'🟡' };
-    el.innerHTML = `<table class="data-table">
-      <thead><tr><th>Type</th><th>Monitor</th><th>Message</th><th>Time</th></tr></thead>
-      <tbody>${data.map(a => `
-        <tr>
-          <td><span class="badge px-2.5 py-1 rounded text-xs font-bold ${a.type==='DOWN'||a.type==='SSL_CRITICAL'?'badge-down':'badge-slow'}">${icons[a.type]||'·'} ${a.type}</span></td>
-          <td class="text-sm text-slate-700">${esc(a.name||a.url)}</td>
-          <td class="text-xs text-slate-500 max-w-sm">${esc(a.message)}</td>
-          <td class="text-xs text-slate-500 font-mono whitespace-nowrap">${fmtTime(a.timestamp)}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
-  } catch(e) {
-    document.getElementById('alerts-list').innerHTML = `<div class="p-8 text-center text-danger-400 text-sm">Failed to load alerts.</div>`;
-  }
+    el.innerHTML = `<table class="data-table"><thead><tr><th>Type</th><th>Monitor</th><th>Message</th><th>Time</th></tr></thead><tbody>${data.map(a => `<tr><td><span class="badge px-2.5 py-1 rounded text-xs font-bold ${a.type==='DOWN'||a.type==='SSL_CRITICAL'?'badge-down':'badge-slow'}">${icons[a.type]||'·'} ${a.type}</span></td><td class="text-sm text-slate-700">${esc(a.name||a.url)}</td><td class="text-xs text-slate-500 max-w-sm">${esc(a.message)}</td><td class="text-xs text-slate-500 font-mono whitespace-nowrap">${fmtTime(a.timestamp)}</td></tr>`).join('')}</tbody></table>`;
+  } catch(e) { document.getElementById('alerts-list').innerHTML = `<div class="p-8 text-center text-danger-400 text-sm">Failed to load alerts.</div>`; }
 }
 
-// ──── Add monitor ─────────────────────────────────────────────────────────────
 function openAddMonitor()  { document.getElementById('modal-add').classList.remove('hidden'); document.getElementById('add-url').focus(); }
 function closeAddMonitor() { document.getElementById('modal-add').classList.add('hidden'); ['add-url','add-name','add-email'].forEach(id=>document.getElementById(id).value=''); document.getElementById('add-threshold').value='3000'; }
 
@@ -793,106 +725,69 @@ async function submitAddMonitor() {
   const name  = document.getElementById('add-name').value.trim();
   const thresh= parseInt(document.getElementById('add-threshold').value) || 3000;
   const email = document.getElementById('add-email').value.trim();
-
   if (!url) { toast('URL is required', 'error'); return; }
-
   const btn = document.getElementById('add-submit-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Checking…';
-
+  btn.disabled = true; btn.textContent = 'Adding...';
   try {
-    await api('/api/websites', {
-      method:'POST',
-      body: JSON.stringify({ url, name, threshold:thresh, alert_email:email })
-    });
+    await api('/api/websites', { method:'POST', body: JSON.stringify({ url, name, threshold:thresh, alert_email:email }) });
+    toast('Monitor added!', 'success');
     closeAddMonitor();
-    toast(`Monitor added: ${url}`, 'success');
-    await fetchMonitors();
-    await fetchStats();
-  } catch(e) {
-    toast('Failed to add monitor: ' + e.message, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Monitor';
-  }
+    fetchMonitors(); fetchStats();
+  } catch(e) { toast('Failed to add monitor', 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Add Monitor'; }
 }
 
-// ──── Force check ─────────────────────────────────────────────────────────────
-async function forceCheck(id) {
-  try {
-    toast('Running check…', 'info');
-    const data = await api(`/api/websites/${id}/check`, { method:'POST' });
-    const status = data.check?.status || '?';
-    const rt     = data.check?.response_time ? Math.round(data.check.response_time)+'ms' : '';
-    toast(`Check complete: ${status} ${rt}`, status==='UP'?'success':'error');
-    await fetchMonitors();
-    await fetchStats();
-  } catch(e) { toast('Check failed', 'error'); }
-}
-
-// ──── Delete monitor ──────────────────────────────────────────────────────────
 async function deleteMonitor(id, name) {
-  if (!confirm(`Delete monitor "${name}"? This will remove all history.`)) return;
+  if (!confirm(`Delete monitor "${name}"?`)) return;
   try {
     await api(`/api/websites/${id}`, { method:'DELETE' });
-    toast(`Deleted: ${name}`, 'success');
-    await fetchMonitors();
-    await fetchStats();
+    toast('Monitor deleted', 'info');
+    fetchMonitors(); fetchStats();
   } catch(e) { toast('Delete failed', 'error'); }
 }
 
-// ──── Manual trigger ──────────────────────────────────────────────────────────
-async function triggerManualCheck() {
+async function forceCheck(id) {
+  toast('Checking monitor...', 'info');
   try {
-    toast('Running all checks…', 'info');
-    const r = await api('/api/run-checks', { method:'POST' });
-    toast(`Checked ${r.checked} monitors`, 'success');
-    await fetchStats();
-    await fetchMonitors();
-    await fetchAndRenderCharts();
-  } catch(e) { toast('Manual check failed', 'error'); }
+    await api(`/api/websites/${id}/check`, { method:'POST' });
+    toast('Check complete', 'success');
+    fetchMonitors(); fetchStats();
+  } catch(e) { toast('Check failed', 'error'); }
 }
 
-// ──── Helpers ─────────────────────────────────────────────────────────────────
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function fmtTime(ts) {
-  if (!ts) return '—';
-  try { const d = new Date(ts.replace(' ','T')+'Z'); return d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}); }
-  catch { return ts; }
-}
-function uptimeColor(pct) {
-  if (pct == null) return 'text-slate-500';
-  if (pct >= 99) return 'text-success-400';
-  if (pct >= 95) return 'text-warn-400';
-  return 'text-danger-400';
-}
-function sslColor(days) {
-  if (days == null) return 'text-slate-500';
-  if (days < 7)  return 'text-danger-400';
-  if (days < 15) return 'text-warn-400';
-  return 'text-success-400';
+async function triggerManualCheck() {
+  toast('Running all checks...', 'info');
+  try {
+    await api('/api/run-checks', { method:'POST' });
+    toast('All checks finished', 'success');
+    fetchMonitors(); fetchStats(); fetchAndRenderCharts();
+  } catch(e) { toast('Check run failed', 'error'); }
 }
 
-// ──── Keyboard shortcuts ──────────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeAddMonitor();
-  if (e.key === 'n' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName!=='INPUT') openAddMonitor();
-});
+// ──── Utilities ───────────────────────────────────────────────────────────────
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmtTime(ts) { 
+    if (!ts) return '';
+    // Handle both ISO and DB format
+    const d = new Date(ts.replace(' ', 'T'));
+    return d.toLocaleString('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+}
+function uptimeColor(u) { return u >= 99 ? 'text-success-400' : u >= 95 ? 'text-warn-400' : 'text-danger-400'; }
+function sslColor(d) { return d < 7 ? 'text-danger-400' : d < 15 ? 'text-warn-400' : 'text-success-400'; }
 
-// ──── Init & polling ──────────────────────────────────────────────────────────
-async function fullRefresh() {
-  await Promise.all([fetchStats(), fetchMonitors()]);
-  if (state.currentPage === 'dashboard') {
-    renderDashMonitors();
-    fetchAndRenderCharts();
-  }
+// ──── Initialize ─────────────────────────────────────────────────────────────
+function init() {
+  fetchStats();
+  fetchMonitors();
+  fetchAndRenderCharts();
+  state.refreshInterval = setInterval(() => {
+    fetchStats();
+    fetchMonitors();
+  }, 5000);
 }
 
-(async () => {
-  await fullRefresh();
-  state.refreshInterval = setInterval(fullRefresh, 5000);
-  setInterval(fetchAndRenderCharts, 30000);
-})();
+// Start by checking auth
+checkAuth();
 </script>
 </body>
 </html>

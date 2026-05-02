@@ -1,34 +1,33 @@
-import sqlite3
 import os
-
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "synthmon.db")
-
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
+    # Use DATABASE_URL from environment
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise ValueError("DATABASE_URL environment variable is not set")
+    
+    conn = psycopg2.connect(db_url)
     return conn
-
 
 def init_db():
     conn = get_connection()
-    c = conn.cursor()
+    cur = conn.cursor()
 
-    c.executescript("""
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             google_id TEXT UNIQUE NOT NULL,
             email TEXT UNIQUE NOT NULL,
             name TEXT,
             picture TEXT,
             role TEXT DEFAULT 'user',
-            created_at TEXT DEFAULT (datetime('now'))
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS monitors (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            id          SERIAL PRIMARY KEY,
             user_id     INTEGER NOT NULL,
             url         TEXT    NOT NULL,
             name        TEXT,
@@ -36,38 +35,38 @@ def init_db():
             threshold   INTEGER DEFAULT 3000,
             alert_email TEXT,
             enabled     INTEGER DEFAULT 1,
-            created_at  TEXT    DEFAULT (datetime('now')),
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS checks (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            id           SERIAL PRIMARY KEY,
             monitor_id   INTEGER NOT NULL,
             status       TEXT    NOT NULL,
             response_time REAL,
             status_code  INTEGER,
             error_msg    TEXT,
-            timestamp    TEXT DEFAULT (datetime('now')),
+            timestamp    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS ssl_info (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            id             SERIAL PRIMARY KEY,
             monitor_id     INTEGER NOT NULL UNIQUE,
             expiry_date    TEXT,
             days_remaining INTEGER,
             issuer         TEXT,
-            last_checked   TEXT DEFAULT (datetime('now')),
+            last_checked   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS alerts (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            id         SERIAL PRIMARY KEY,
             monitor_id INTEGER NOT NULL,
             type       TEXT    NOT NULL,
             message    TEXT    NOT NULL,
             sent       INTEGER DEFAULT 0,
-            timestamp  TEXT DEFAULT (datetime('now')),
+            timestamp  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE
         );
 
@@ -78,5 +77,6 @@ def init_db():
     """)
 
     conn.commit()
+    cur.close()
     conn.close()
-    print(f"[DB] Initialized at {DB_PATH}")
+    print("[DB] Initialized with PostgreSQL")

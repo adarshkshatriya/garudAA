@@ -1,4 +1,5 @@
 from database.schema import get_connection
+from psycopg2.extras import RealDictCursor
 
 def get_or_create_user(user_info):
     """
@@ -6,7 +7,7 @@ def get_or_create_user(user_info):
     Returns the user as a dictionary.
     """
     conn = get_connection()
-    c = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     
     google_id = user_info.get('sub')
     email = user_info.get('email')
@@ -14,20 +15,20 @@ def get_or_create_user(user_info):
     picture = user_info.get('picture')
     
     # Check if user exists
-    c.execute("SELECT * FROM users WHERE google_id = ?", (google_id,))
-    user = c.fetchone()
+    cur.execute("SELECT * FROM users WHERE google_id = %s", (google_id,))
+    user = cur.fetchone()
     
     if not user:
         # Create new user
-        c.execute("""
+        cur.execute("""
             INSERT INTO users (google_id, email, name, picture, role)
-            VALUES (?, ?, ?, ?, 'user')
+            VALUES (%s, %s, %s, %s, 'user')
+            RETURNING *
         """, (google_id, email, name, picture))
+        user = cur.fetchone()
         conn.commit()
         
-        c.execute("SELECT * FROM users WHERE google_id = ?", (google_id,))
-        user = c.fetchone()
-        
+    cur.close()
     conn.close()
     
     return dict(user) if user else None
@@ -37,9 +38,10 @@ def get_user_by_id(user_id):
     Fetches a user by their internal ID.
     """
     conn = get_connection()
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-    user = c.fetchone()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+    user = cur.fetchone()
+    cur.close()
     conn.close()
     
     return dict(user) if user else None

@@ -7,6 +7,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
 <script>
   tailwind.config = {
     theme: {
@@ -79,14 +80,14 @@
 <body>
   <div class="login-card">
     <!-- Logo -->
-    <img src="{{ url_for('static', filename='logo.png') }}" alt="garudAA logo" class="w-56 mx-auto mb-6 object-contain">
+    <img src="static/logo.png" alt="garudAA logo" class="w-56 mx-auto mb-6 object-contain">
     
     <!-- Welcome Text -->
     <h1 class="text-2xl font-bold text-slate-800 mb-2">Welcome Back</h1>
     <p class="text-sm text-slate-500 mb-8 leading-relaxed">Sign in to the Synthetic Monitoring Alert System to access your dashboard.</p>
     
     <!-- Google Login Button -->
-    <a href="{{ url_for('auth.auth_login') }}" class="btn-google">
+    <button onclick="login()" class="btn-google">
       <svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg">
         <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
         <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -95,12 +96,24 @@
         <path d="M1 1h22v22H1z" fill="none"/>
       </svg>
       Sign in with Google
-    </a>
+    </button>
 
     <!-- Footer links -->
     <div class="mt-8 text-sm text-slate-500">
       Need help? <a href="https://accounts.google.com/signin/recovery" target="_blank" class="link">Forgot Password</a>
     </div>
   </div>
+
+  <script>
+    function login() {
+        window.location.href = `${CONFIG.API_BASE_URL}/auth/login`;
+    }
+
+    // Check for errors in URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('error')) {
+        alert(`Login failed: ${params.get('error')}`);
+    }
+  </script>
 </body>
 </html>
