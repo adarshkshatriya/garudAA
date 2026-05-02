@@ -37,7 +37,12 @@ def auth_callback():
             return redirect(f"{frontend_url}/?error=no_user_info")
             
         # Store or fetch user from DB
-        user = get_or_create_user(user_info)
+        user = get_or_create_user(
+            google_id=user_info.get('sub'),
+            email=user_info.get('email'),
+            name=user_info.get('name'),
+            picture=user_info.get('picture')
+        )
         
         if not user:
             return redirect(f"{frontend_url}/?error=db_fail")
@@ -48,6 +53,8 @@ def auth_callback():
         # Redirect to frontend dashboard
         return redirect(f"{frontend_url}/dashboard.html")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Auth error: {e}")
         return redirect(f"{frontend_url}/?error=auth_failed")
 

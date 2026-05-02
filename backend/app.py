@@ -17,10 +17,10 @@ def create_app():
 
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "synthmon-dev-secret")
     
-    # Session configuration for cross-site cookies
+    # Session configuration
     app.config.update(
-        SESSION_COOKIE_SAMESITE='None',
-        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_SAMESITE='Lax',
+        SESSION_COOKIE_SECURE=False,
     )
 
     # Init DB
@@ -62,6 +62,12 @@ def create_app():
 
     # Start background monitor scheduler
     start_scheduler()
+
+    @app.errorhandler(500)
+    def handle_500(e):
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "Internal Server Error"}), 500
 
     return app
 

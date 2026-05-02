@@ -1,47 +1,33 @@
-from database.schema import get_connection
-from psycopg2.extras import RealDictCursor
+from database.db_manager import DBManager
 
-def get_or_create_user(user_info):
-    """
-    Fetches a user by google_id. If the user doesn't exist, creates them.
-    Returns the user as a dictionary.
-    """
-    conn = get_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    
-    google_id = user_info.get('sub')
-    email = user_info.get('email')
-    name = user_info.get('name')
-    picture = user_info.get('picture')
-    
-    # Check if user exists
-    cur.execute("SELECT * FROM users WHERE google_id = %s", (google_id,))
-    user = cur.fetchone()
-    
+class User:
+    @staticmethod
+    def get_by_google_id(google_id):
+        db = DBManager()
+        user = db.query_one("SELECT * FROM users WHERE google_id = %s", [google_id])
+        db.close()
+        return user
+
+    @staticmethod
+    def get_by_id(user_id):
+        db = DBManager()
+        user = db.query_one("SELECT * FROM users WHERE id = %s", [user_id])
+        db.close()
+        return user
+
+    @staticmethod
+    def create(google_id, email, name, picture=None):
+        db = DBManager()
+        user_id = db.execute(
+            "INSERT INTO users (google_id, email, name, picture) VALUES (%s, %s, %s, %s) RETURNING id",
+            (google_id, email, name, picture)
+        )
+        db.close()
+        # Fetch the full user object
+        return User.get_by_id(user_id)
+
+def get_or_create_user(google_id, email, name, picture=None):
+    user = User.get_by_google_id(google_id)
     if not user:
-        # Create new user
-        cur.execute("""
-            INSERT INTO users (google_id, email, name, picture, role)
-            VALUES (%s, %s, %s, %s, 'user')
-            RETURNING *
-        """, (google_id, email, name, picture))
-        user = cur.fetchone()
-        conn.commit()
-        
-    cur.close()
-    conn.close()
-    
-    return dict(user) if user else None
-
-def get_user_by_id(user_id):
-    """
-    Fetches a user by their internal ID.
-    """
-    conn = get_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
-    
-    return dict(user) if user else None
+        user = User.create(google_id, email, name, picture)
+    return user

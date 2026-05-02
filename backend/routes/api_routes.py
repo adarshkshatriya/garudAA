@@ -9,6 +9,7 @@ def get_user_id():
 
 
 # ── Stats ──────────────────────────────────────────────────────────────────────
+
 @api.route("/stats")
 def stats():
     try:
@@ -50,6 +51,7 @@ def list_websites():
 
 @api.route("/websites", methods=["POST"])
 def add_website():
+    print(f"[DEBUG] add_website called with data: {request.get_json(force=True)}")
     data = request.get_json(force=True) or {}
     url = (data.get("url") or "").strip()
     name = (data.get("name") or "").strip()
@@ -69,6 +71,9 @@ def add_website():
         check_ssl(monitor)
         return jsonify({"id": monitor_id, "check": result}), 201
     except Exception as e:
+        print(f"Add Monitor Error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 400
 
 
