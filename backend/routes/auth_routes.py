@@ -27,7 +27,10 @@ def auth_login():
 @auth_bp.route('/callback')
 def auth_callback():
     """Handles the callback from Google OAuth."""
-    frontend_url = os.environ.get("FRONTEND_URL", "")
+    frontend_url = os.environ.get("FRONTEND_URL")
+    if not frontend_url:
+        # Fallback to current request host but assume frontend is on same domain or sibling
+        frontend_url = request.host_url.replace("-api.onrender.com", "-frontend.onrender.com").rstrip('/')
     
     try:
         token = google.authorize_access_token()
