@@ -61,9 +61,11 @@ def auth_callback():
         print(f"Auth error: {e}")
         return redirect(f"{frontend_url}/?error=auth_failed")
 
-@auth_bp.route('/auth/logout')
+@auth_bp.route('/logout')
 def auth_logout():
     """Logs out the user and clears the session."""
-    frontend_url = os.environ.get("FRONTEND_URL", "")
+    frontend_url = os.environ.get("FRONTEND_URL")
+    if not frontend_url:
+        frontend_url = request.host_url.replace("-api.onrender.com", "-frontend.onrender.com").rstrip('/')
     session.pop('user', None)
     return redirect(f"{frontend_url}/")
