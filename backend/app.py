@@ -12,8 +12,8 @@ def create_app():
     app = Flask(__name__)
     
     # Configure CORS - allow the frontend URL
-    frontend_url = os.environ.get("FRONTEND_URL", "*")
-    CORS(app, supports_credentials=True, origins=[frontend_url] if frontend_url != "*" else "*")
+    frontend_url = os.environ.get("FRONTEND_URL", "https://garudaa-frontend.onrender.com")
+    CORS(app, supports_credentials=True, origins=[frontend_url, "http://localhost:5500", "http://127.0.0.1:5500"])
 
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "synthmon-dev-secret")
     
