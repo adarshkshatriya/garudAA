@@ -3,7 +3,7 @@ from flask import Blueprint, redirect, url_for, session, current_app
 from authlib.integrations.flask_client import OAuth
 from models.user import get_or_create_user
 
-auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+auth_bp = Blueprint('auth', __name__, url_prefix='/auth', strict_slashes=False)
 oauth = OAuth()
 
 # Google OAuth registration
@@ -25,7 +25,6 @@ def auth_login():
     return google.authorize_redirect(redirect_uri)
 
 @auth_bp.route('/callback')
-@auth_bp.route('/callback/')
 def auth_callback():
     """Handles the callback from Google OAuth."""
     frontend_url = os.environ.get("FRONTEND_URL", "")
