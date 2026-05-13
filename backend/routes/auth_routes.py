@@ -3,7 +3,7 @@ from flask import Blueprint, redirect, url_for, session, current_app
 from authlib.integrations.flask_client import OAuth
 from models.user import get_or_create_user
 
-auth_bp = Blueprint('auth', __name__)
+auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 oauth = OAuth()
 
 # Google OAuth registration
@@ -15,7 +15,7 @@ google = oauth.register(
     client_kwargs={'scope': 'openid email profile'}
 )
 
-@auth_bp.route('/auth/login')
+@auth_bp.route('/login')
 def auth_login():
     """Initiates the Google OAuth login flow."""
     # Use internal callback but ensure it's https in production
@@ -24,7 +24,8 @@ def auth_login():
         redirect_uri = redirect_uri.replace('http://', 'https://')
     return google.authorize_redirect(redirect_uri)
 
-@auth_bp.route('/auth/callback')
+@auth_bp.route('/callback')
+@auth_bp.route('/callback/')
 def auth_callback():
     """Handles the callback from Google OAuth."""
     frontend_url = os.environ.get("FRONTEND_URL", "")
