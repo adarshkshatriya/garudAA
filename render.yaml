@@ -18,3 +18,21 @@ services:
         sync: false
       - key: PYTHON_VERSION
         value: 3.11.0
+
+  - type: web
+    name: garudaa-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: ""
+    staticPublishPath: .
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /dashboard
+        destination: /dashboard.html
+      - type: rewrite
+        source: /login
+        destination: /index.html
