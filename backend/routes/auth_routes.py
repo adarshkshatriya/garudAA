@@ -3,7 +3,7 @@ from flask import Blueprint, redirect, url_for, session, current_app
 from authlib.integrations.flask_client import OAuth
 from models.user import get_or_create_user
 
-auth_bp = Blueprint('auth', __name__, url_prefix='/auth', strict_slashes=True)
+auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 oauth = OAuth()
 
 # Google OAuth registration
